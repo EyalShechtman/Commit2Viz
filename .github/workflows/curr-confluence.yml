@@ -190,7 +190,7 @@ jobs:
           --arg system_prompt "$SYSTEM_PROMPT" \
           --arg user_prompt "$USER_PROMPT" \
           '{
-            "model": "gpt-4",
+            "model": "gpt-4o",
             "messages": [
               {
                 "role": "system",
@@ -201,7 +201,6 @@ jobs:
                 "content": ($user_prompt + "\n\nCURRENT CONTENT:\n" + $confluence + "\n\nRECENT CHANGES:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes)
               }
             ],
-            "max_tokens": 2000,
             "temperature": 0.7
           }' > openai-prompt.json
         
