@@ -1,0 +1,33 @@
+name: get curr confluence
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  get-curr-confluence:
+    runs-on: ubuntu-latest
+    
+    env:
+      CONFLUENCE_URL: ${{ secrets.CONFLUENCE_URL }}
+      CONFLUENCE_USERNAME: ${{ secrets.CONFLUENCE_USERNAME }}
+      CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+      REPO_PAGE_ID: ${{ secrets.REPO_PAGE_ID }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: get curr confluencen repo file
+      run: |
+            echo "fetch curr confluence repo file"
+            curl --request GET \
+            --url "$CONFLUENCE_URL/wiki/api/v2/pages/$REPO_PAGE_ID?body-format=storage&include-versions=true" \
+            --user "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" \
+            --header 'Accept: application/json' \
+            -o confluence-response.json
+
+            echo "=== CONFLUENCE PAGE CONTENT ==="
+            cat confluence-response.json
