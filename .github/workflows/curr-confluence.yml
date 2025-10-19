@@ -187,11 +187,11 @@ jobs:
             "messages": [
               {
                 "role": "system",
-                "content": "You are a technical documentation assistant. You will receive current Confluence documentation, git commit information, and code changes. Generate updated Confluence documentation that reflects the recent changes made to the codebase."
+                "content": "You are a technical documentation assistant specializing in Confluence formatting. You will receive current Confluence documentation, git commit information, and code changes. Generate updated Confluence documentation that reflects the recent changes made to the codebase.\n\nFORMATTING REQUIREMENTS:\n- Use proper Confluence markup (HTML) with clean structure\n- Include headers (h1, h2, h3) for organization\n- Use tables for structured data (commits, files changed, contributors)\n- Add code blocks with syntax highlighting for code changes\n- Use panels/info boxes for important information\n- Include proper spacing and visual hierarchy\n- Make it visually appealing and easy to read\n- Use Confluence macros when appropriate (code, info panels, etc.)\n- Add timestamps and version information\n- Include links and references where relevant"
               },
               {
                 "role": "user",
-                "content": ("Current Confluence Documentation:\n\n" + $confluence + "\n\n\nRecent Git Changes:\n\n" + $commit_data + "\n\n\nCode Changes (Diff):\n\n" + $code_changes + "\n\n\nFile Statistics:\n\n" + $file_stats + "\n\n\nPlease generate updated Confluence documentation that reflects these changes. Return only the updated HTML content.")
+                "content": ("Current Confluence Documentation:\n\n" + $confluence + "\n\n\nRecent Git Changes:\n\n" + $commit_data + "\n\n\nCode Changes (Diff):\n\n" + $code_changes + "\n\n\nFile Statistics:\n\n" + $file_stats + "\n\n\nPlease generate updated Confluence documentation that reflects these changes. Use proper HTML formatting with:\n- Clear section headers\n- Organized tables for commit data\n- Code blocks for code changes\n- Info panels for important updates\n- Professional styling and layout\n- Timestamps and version tracking\n\nReturn only the updated HTML content ready for Confluence.")
               }
             ],
             "max_tokens": 3000,
