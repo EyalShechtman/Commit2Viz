@@ -218,7 +218,7 @@ jobs:
         
         # Get the current page version and ID
         PAGE_VERSION=$(jq -r '.version.number' confluence-response.json)
-        PAGE_ID=$(jq -r '.id' confluence-response.json)
+        REPO_PAGE_ID=$(jq -r '.id' confluence-response.json)
         
         # Get the AI-generated content
         AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
@@ -227,23 +227,24 @@ jobs:
         jq -n \
           --arg content "$AI_CONTENT" \
           --argjson version $PAGE_VERSION \
+          --argjson page_id $REPO_PAGE_ID \
           '{
-            "version": {
-              "number": ($version + 1)
-            },
+            "id": $page_id,
+            "status": "current",
             "title": "confluence repo test page",
-            "type": "page",
             "body": {
-              "storage": {
-                "value": $content,
-                "representation": "storage"
-              }
+              "representation": "storage",
+              "value": $content
+            },
+            "version": {
+              "number": ($version + 1),
+              "message": "Auto-updated by GitHub Actions workflow"
             }
           }' > confluence-update.json
         
         echo "=== SENDING UPDATE TO CONFLUENCE ==="
         curl --request PUT \
-          --url "$CONFLUENCE_URL/wiki/api/v2/pages/$PAGE_ID" \
+          --url "$CONFLUENCE_URL/wiki/api/v2/pages/$REPO_PAGE_ID" \
           --user "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" \
           --header 'Accept: application/json' \
           --header 'Content-Type: application/json' \
