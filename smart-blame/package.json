@@ -1,0 +1,20 @@
+{
+  "name": "bitbucket-repository-code-overview-card-ui-kit",
+  "version": "1.1.24",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "lint": "eslint src/**/*"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0"
+  },
+  "dependencies": {
+    "@forge/bridge": "5.6.0",
+    "@forge/react": "11.5.0",
+    "@forge/resolver": "1.7.0",
+    "react": "^18.2.0"
+  }
+}
