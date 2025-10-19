@@ -229,7 +229,7 @@ jobs:
           --argjson version $PAGE_VERSION \
           '{
             "version": {
-              "number": $version + 1
+              "number": ($version + 1)
             },
             "title": "confluence repo test page",
             "type": "page",
