@@ -244,6 +244,16 @@ jobs:
         if jq -e '.choices[0].message.content' openai-response.json > /dev/null 2>&1; then
           echo "✅ Using AI-generated content"
           AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
+          
+          # Strip quotes from AI content to prevent HTML entity encoding issues
+          AI_CONTENT=$(echo "$AI_CONTENT" | sed 's/^"//' | sed 's/"$//')
+          echo "Content after quote stripping: $(echo "$AI_CONTENT" | head -c 100)..."
+          
+          # Safety check - if content looks problematic, use fallback
+          if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR\|Something went wrong"; then
+            echo "❌ AI content contains error messages - using safe fallback"
+            AI_CONTENT="<h1>Commit2Viz Repository</h1><p><strong>Repository Status:</strong> Active</p><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Activity</h2><p>GitHub Actions workflow is running and updating this page automatically.</p><h2>Common Issues & Solutions</h2><p>This section will be populated as issues are encountered and resolved.</p>"
+          fi
         else
           echo "⚠️  OpenAI failed, using original Confluence content as fallback"
           AI_CONTENT=$(jq -r '.body.storage.value' confluence-response.json)
