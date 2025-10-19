@@ -1,0 +1,20 @@
+modules:
+  bitbucket:repoCodeOverviewCard:
+    - key: smart-blame-hello-world-repository-code-overview-card
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: smart-blame
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs22.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/c111c8f2-8d93-49e0-aad2-c0bdd02c0222
