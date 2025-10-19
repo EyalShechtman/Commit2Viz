@@ -248,8 +248,8 @@ jobs:
           # Strip quotes
           AI_CONTENT=$(echo "$AI_CONTENT" | sed 's/^"//' | sed 's/"$//')
           
-          # Safety check
-          if echo "$AI_CONTENT" | grep -q -E "(error|Error|ERROR|Something went wrong|<!DOCTYPE|<html|<head|<body)" || [ -z "$AI_CONTENT" ]; then
+          # Safety check - look for actual HTML document structure tags or error messages
+          if echo "$AI_CONTENT" | grep -q -E "(Something went wrong|<!DOCTYPE|<html>|<html |<head>|<head |<body>|<body )" || [ -z "$AI_CONTENT" ]; then
             echo "❌ AI content contains errors or full HTML document structure - using safe fallback"
             AI_CONTENT="<h1>$ENGINEER_NAME - Activity Log</h1><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Commit</h2><p>Commit: ${{ github.sha }}</p><p>Message: ${{ github.event.head_commit.message }}</p>"
           fi
