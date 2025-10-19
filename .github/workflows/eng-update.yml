@@ -1,0 +1,296 @@
+name: Update Engineer Confluence Page
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  update-engineer-page:
+    runs-on: ubuntu-latest
+    
+    env:
+      CONFLUENCE_URL: ${{ secrets.CONFLUENCE_URL }}
+      CONFLUENCE_USERNAME: ${{ secrets.CONFLUENCE_USERNAME }}
+      CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Identify Engineer and Get Page ID
+      id: engineer_info
+      run: |
+        # Get the commit author
+        COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
+        echo "Commit Author: $COMMIT_AUTHOR"
+        
+        # Map author to page ID (case-insensitive matching)
+        AUTHOR_UPPER=$(echo "$COMMIT_AUTHOR" | tr '[:lower:]' '[:upper:]')
+        
+        case "$AUTHOR_UPPER" in
+          *GUY*)
+            PAGE_ID="491638"
+            ENGINEER_NAME="GUY"
+            ;;
+          *EYAL*)
+            PAGE_ID="491645"
+            ENGINEER_NAME="EYAL"
+            ;;
+          *ARVIN*)
+            PAGE_ID="98393"
+            ENGINEER_NAME="ARVIN"
+            ;;
+          *MAYA*)
+            PAGE_ID="557203"
+            ENGINEER_NAME="MAYA"
+            ;;
+          *)
+            echo "⚠️  Unknown author: $COMMIT_AUTHOR"
+            echo "Skipping Confluence update for unknown engineer"
+            exit 0
+            ;;
+        esac
+        
+        echo "engineer_name=$ENGINEER_NAME" >> $GITHUB_OUTPUT
+        echo "page_id=$PAGE_ID" >> $GITHUB_OUTPUT
+        echo "✅ Identified Engineer: $ENGINEER_NAME (Page ID: $PAGE_ID)"
+
+    - name: Extract Engineer's Commit Information
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        echo "=== ENGINEER COMMIT INFORMATION ==="
+        echo "Engineer: ${{ steps.engineer_info.outputs.engineer_name }}"
+        echo "Current Commit SHA: ${{ github.sha }}"
+        echo "Commit Message: ${{ github.event.head_commit.message }}"
+        echo "Timestamp: ${{ github.event.head_commit.timestamp }}"
+        
+        # For merge commits, get the changes from the merged branch
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+          echo "=== MERGE COMMIT DETECTED ==="
+          MERGE_PARENTS=$(git rev-list --parents -n 1 HEAD | wc -w)
+          if [ $MERGE_PARENTS -eq 3 ]; then
+            MERGED_BRANCH=$(git rev-list --parents -n 1 HEAD | cut -d' ' -f3)
+            BASE_COMMIT=$(git merge-base HEAD~1 $MERGED_BRANCH)
+            COMPARE_RANGE="$BASE_COMMIT..$MERGED_BRANCH"
+            echo "=== COMMITS FROM MERGED BRANCH ==="
+            git log --oneline $COMPARE_RANGE
+          else
+            COMPARE_RANGE="origin/main...HEAD"
+          fi
+        else
+          COMPARE_RANGE="origin/main...HEAD"
+        fi
+        
+        echo "compare_range=$COMPARE_RANGE" >> $GITHUB_ENV
+
+    - name: Get Files and Code Changes
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        COMPARE_RANGE="${{ env.compare_range }}"
+        
+        echo "=== FILES CHANGED BY ENGINEER ==="
+        git diff --name-only $COMPARE_RANGE
+        
+        echo "=== CODE CHANGES ==="
+        git diff $COMPARE_RANGE > code-changes.diff
+        cat code-changes.diff
+        
+        echo "=== FILE STATISTICS ==="
+        git diff --stat $COMPARE_RANGE > file-stats.txt
+        cat file-stats.txt
+
+    - name: Create Engineer Commit Data
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        COMPARE_RANGE="${{ env.compare_range }}"
+        
+        # Create commit history for this engineer
+        COMMIT_HISTORY=$(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso $COMPARE_RANGE | tr '\n' ',' | sed 's/,$//')
+        
+        # Get files changed
+        FILES_CHANGED=$(git diff --name-only $COMPARE_RANGE | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
+        
+        # Get number of additions and deletions
+        ADDITIONS=$(git diff --shortstat $COMPARE_RANGE | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
+        DELETIONS=$(git diff --shortstat $COMPARE_RANGE | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
+        
+        cat > engineer-commit-data.json << EOF
+        {
+          "engineer": "${{ steps.engineer_info.outputs.engineer_name }}",
+          "current_commit": {
+            "sha": "${{ github.sha }}",
+            "author": "${{ github.event.head_commit.author.name }}",
+            "message": $(echo '${{ github.event.head_commit.message }}' | jq -R -s .),
+            "timestamp": "${{ github.event.head_commit.timestamp }}"
+          },
+          "branch": "${{ github.ref_name }}",
+          "commit_history": [$COMMIT_HISTORY],
+          "files_changed": [$FILES_CHANGED],
+          "total_commits": $(git rev-list --count $COMPARE_RANGE),
+          "additions": $ADDITIONS,
+          "deletions": $DELETIONS
+        }
+        EOF
+        
+        echo "=== ENGINEER COMMIT DATA ==="
+        cat engineer-commit-data.json
+
+    - name: Get Current Confluence Engineer Page
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        PAGE_ID="${{ steps.engineer_info.outputs.page_id }}"
+        
+        echo "=== FETCHING CONFLUENCE PAGE FOR ${{ steps.engineer_info.outputs.engineer_name }} ==="
+        curl --request GET \
+          --url "$CONFLUENCE_URL/wiki/api/v2/pages/$PAGE_ID?body-format=storage" \
+          --user "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" \
+          --header 'Accept: application/json' \
+          -o confluence-engineer-page.json
+        
+        echo "=== CURRENT PAGE CONTENT ==="
+        cat confluence-engineer-page.json
+        
+        echo "=== PAGE TITLE ==="
+        jq -r '.title' confluence-engineer-page.json
+        
+        echo "=== PAGE BODY ==="
+        jq -r '.body.storage.value' confluence-engineer-page.json
+
+    - name: Generate AI Update for Engineer Page
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        echo "=== GENERATING AI UPDATE FOR ${{ steps.engineer_info.outputs.engineer_name }} ==="
+        
+        # Get current content and commit data
+        CONFLUENCE_CONTENT=$(jq -r '.body.storage.value // "No content found"' confluence-engineer-page.json | head -c 3000 | jq -R -s .)
+        COMMIT_DATA=$(cat engineer-commit-data.json | jq -c .)
+        CODE_CHANGES=$(cat code-changes.diff | head -c 4000 | jq -R -s .)
+        FILE_STATS=$(cat file-stats.txt | head -c 1000 | jq -R -s .)
+        
+        # Create prompts
+        SYSTEM_PROMPT="You are a technical documentation expert who writes updates for engineer activity pages on Confluence. Generate clean HTML content that documents what this engineer has accomplished. Focus on: what they built/fixed, why it matters, technical approach, and impact. Keep it professional but conversational. Return ONLY clean HTML - NO quotes, NO JSON wrapping. Use proper HTML structure with headers, lists, and paragraphs."
+        
+        USER_PROMPT="Update the Confluence page for engineer ${{ steps.engineer_info.outputs.engineer_name }}. Document their recent work in a clear, organized way. Include sections for: Recent Work Summary (what they accomplished), Technical Details (how they did it, key changes), Files Modified (list of changed files), Impact & Context (why this matters). Preserve any existing important content but update with new information. Use proper HTML formatting. Return ONLY clean HTML without quotes or JSON."
+        
+        # Build OpenAI request
+        jq -n \
+          --arg confluence "$CONFLUENCE_CONTENT" \
+          --arg commit_data "$COMMIT_DATA" \
+          --arg code_changes "$CODE_CHANGES" \
+          --arg file_stats "$FILE_STATS" \
+          --arg system_prompt "$SYSTEM_PROMPT" \
+          --arg user_prompt "$USER_PROMPT" \
+          --arg engineer "${{ steps.engineer_info.outputs.engineer_name }}" \
+          '{
+            "model": "gpt-4o",
+            "messages": [
+              {
+                "role": "system",
+                "content": $system_prompt
+              },
+              {
+                "role": "user",
+                "content": ($user_prompt + "\n\nCURRENT PAGE CONTENT:\n" + $confluence + "\n\nNEW COMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats)
+              }
+            ],
+            "temperature": 0.7
+          }' > openai-engineer-prompt.json
+        
+        echo "=== CALLING OPENAI API ==="
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $OPENAI_API_KEY" \
+          -d @openai-engineer-prompt.json \
+          https://api.openai.com/v1/chat/completions \
+          -o openai-engineer-response.json
+        
+        echo "=== OPENAI RESPONSE ==="
+        cat openai-engineer-response.json
+        
+        # Check for errors
+        if jq -e '.error' openai-engineer-response.json > /dev/null; then
+          echo "❌ OPENAI API ERROR:"
+          jq -r '.error.message' openai-engineer-response.json
+          exit 1
+        else
+          echo "✅ OPENAI API SUCCESS"
+          echo "=== GENERATED UPDATE ==="
+          jq -r '.choices[0].message.content' openai-engineer-response.json
+        fi
+
+    - name: Update Engineer Confluence Page
+      if: steps.engineer_info.outputs.page_id != ''
+      run: |
+        PAGE_ID="${{ steps.engineer_info.outputs.page_id }}"
+        ENGINEER_NAME="${{ steps.engineer_info.outputs.engineer_name }}"
+        
+        echo "=== UPDATING CONFLUENCE PAGE FOR $ENGINEER_NAME ==="
+        
+        # Get page version
+        PAGE_VERSION=$(jq -r '.version.number' confluence-engineer-page.json)
+        PAGE_TITLE=$(jq -r '.title' confluence-engineer-page.json)
+        
+        # Get AI-generated content
+        if jq -e '.choices[0].message.content' openai-engineer-response.json > /dev/null 2>&1; then
+          echo "✅ Using AI-generated content"
+          AI_CONTENT=$(jq -r '.choices[0].message.content' openai-engineer-response.json)
+          
+          # Strip quotes
+          AI_CONTENT=$(echo "$AI_CONTENT" | sed 's/^"//' | sed 's/"$//')
+          
+          # Safety check
+          if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR"; then
+            echo "❌ AI content contains errors - using safe fallback"
+            AI_CONTENT="<h1>$ENGINEER_NAME - Activity Log</h1><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Commit</h2><p>Commit: ${{ github.sha }}</p><p>Message: ${{ github.event.head_commit.message }}</p>"
+          fi
+        else
+          echo "⚠️  Using original content as fallback"
+          AI_CONTENT=$(jq -r '.body.storage.value' confluence-engineer-page.json)
+        fi
+        
+        # Create update payload
+        jq -n \
+          --arg content "$AI_CONTENT" \
+          --argjson version $PAGE_VERSION \
+          --argjson page_id $PAGE_ID \
+          --arg title "$PAGE_TITLE" \
+          '{
+            "id": $page_id,
+            "status": "current",
+            "title": $title,
+            "body": {
+              "representation": "storage",
+              "value": $content
+            },
+            "version": {
+              "number": ($version + 1),
+              "message": "Auto-updated by GitHub Actions - New commit activity"
+            }
+          }' > confluence-engineer-update.json
+        
+        echo "=== SENDING UPDATE TO CONFLUENCE ==="
+        curl --request PUT \
+          --url "$CONFLUENCE_URL/wiki/api/v2/pages/$PAGE_ID" \
+          --user "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" \
+          --header 'Accept: application/json' \
+          --header 'Content-Type: application/json' \
+          --data @confluence-engineer-update.json \
+          -o confluence-engineer-update-response.json
+        
+        echo "=== CONFLUENCE UPDATE RESPONSE ==="
+        cat confluence-engineer-update-response.json
+        
+        # Check if successful
+        if jq -e '.id' confluence-engineer-update-response.json > /dev/null; then
+          echo "✅ Confluence page updated successfully for $ENGINEER_NAME!"
+          echo "   New version: $(jq -r '.version.number' confluence-engineer-update-response.json)"
+          echo "   Page URL: $CONFLUENCE_URL$(jq -r '._links.webui' confluence-engineer-update-response.json)"
+        else
+          echo "❌ Confluence update failed"
+          echo "   Error: $(jq -r '.message // "Unknown error"' confluence-engineer-update-response.json)"
+          exit 1
+        fi
+
