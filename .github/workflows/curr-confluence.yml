@@ -177,9 +177,9 @@ jobs:
         FILE_STATS_JSON=$(echo "$FILE_STATS_DECODED" | head -c 1000 | jq -R -s .)
         
         # Create simplified prompts to avoid JSON escaping issues
-        SYSTEM_PROMPT="You are a Confluence documentation expert. Generate clean HTML content starting with <h1>Commit2Viz Repository</h1>. Focus on conceptual overview, not detailed commits. Use <pre><code> for code blocks. Add Common Issues & Solutions section. Make it high-level and strategic."
+        SYSTEM_PROMPT="You are a Confluence documentation expert creating comprehensive project documentation. Generate clean HTML content that serves as a living project overview. Focus on conceptual understanding, strategic insights, and practical guidance. Return ONLY clean HTML content - NO quotes, NO JSON, NO escaped characters. Start with <h1>Commit2Viz Repository</h1>. Make it conceptual and strategic, not technical implementation details. Use proper HTML structure with clear section hierarchy."
         
-        USER_PROMPT="Create a conceptual repository overview for Confluence. Start with <h1>Commit2Viz Repository</h1>. Use H2/H3 headers. Focus on significant changes only. Add Common Issues & Solutions section with bugs, fixes, and troubleshooting. Return only clean HTML content."
+        USER_PROMPT="Create comprehensive project documentation for Confluence that serves as a living project overview. Start with <h1>Commit2Viz Repository</h1>. Create sections for: Project Overview & Purpose (what the repo does and why it exists), Architecture & Key Components (high-level system design), Recent Strategic Changes (major developments, not routine commits), Common Issues & Solutions (problems encountered and solved, troubleshooting guide, best practices), Development Status & Roadmap (current state and future direction), Team Notes & Insights (lessons learned). Focus on strategic and conceptual understanding. Use proper HTML formatting. Return ONLY clean HTML content without quotes or JSON wrapping."
         
         # Create the prompt for OpenAI using jq to build proper JSON
         jq -n \
