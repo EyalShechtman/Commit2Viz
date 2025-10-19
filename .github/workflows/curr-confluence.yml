@@ -131,7 +131,7 @@ jobs:
         echo "=== COMPREHENSIVE COMMIT DATA ==="
         cat commit-data.json
 
-    - name: get curr confluence repo file
+    - name: Get Current Confluence Repo File
       run: |
         echo "fetch curr confluence repo file"
         curl --request GET \
@@ -187,11 +187,11 @@ jobs:
             "messages": [
               {
                 "role": "system",
-                "content": "You are a Confluence documentation expert. Generate clean, professional HTML content for Confluence pages.\n\nCRITICAL RULES:\n1. Return ONLY clean HTML content - NO JSON, NO escaped characters, NO raw data\n2. Use proper HTML structure with semantic tags\n3. Format code changes as <pre><code> blocks with proper syntax\n4. Create clean tables for commit data\n5. Use proper headings (h1, h2, h3) for organization\n6. Include proper spacing and visual hierarchy\n7. Do NOT include raw JSON data or escaped content\n8. Focus on readability and professional appearance\n\nFORMATTING GUIDELINES:\n- Use <table> with <thead> and <tbody> for data\n- Use <pre><code> for code blocks\n- Use <strong> and <em> for emphasis\n- Use proper paragraph <p> tags\n- Include timestamps in readable format\n- Make it visually appealing"
+                "content": "You are a Confluence documentation expert creating conceptual repository overviews. Generate clean, professional HTML content.\n\nCRITICAL RULES:\n1. Return ONLY clean HTML content - NO JSON, NO escaped characters, NO raw data\n2. Start with <h1>Commit2Viz Repository</h1> as the main title\n3. Focus on CONCEPTUAL overview, not detailed commit logs\n4. Use <pre><code> for single, non-wrapping code blocks\n5. Only include important/significant changes, not every commit\n6. Create a 'Common Issues & Solutions' section\n7. Make it high-level and strategic, not granular\n\nCONTENT STRUCTURE:\n- H1: Commit2Viz Repository (main title)\n- H2: Architecture & Components\n- H2: Recent Significant Changes (only major ones)\n- H2: Common Issues & Solutions\n- H3: Known Bugs and Fixes\n- H3: Troubleshooting Guide\n\nFORMATTING:\n- Use <h1>, <h2>, <h3> for clear section hierarchy\n- Use <pre><code> for code blocks (single block, no wrapping)\n- Use <strong> for emphasis\n- Use proper paragraph <p> tags\n- Focus on conceptual understanding, not implementation details"
               },
               {
                 "role": "user",
-                "content": ("Analyze the following data and create clean Confluence documentation:\n\nCURRENT CONTENT:\n" + $confluence + "\n\nCOMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats + "\n\nINSTRUCTIONS:\n1. Create clean HTML content for Confluence\n2. Use proper tables for commit information\n3. Format code changes in <pre><code> blocks\n4. Include clear section headers\n5. Add timestamps in readable format\n6. Do NOT include raw JSON or escaped content\n7. Focus on professional, readable formatting\n\nReturn ONLY the clean HTML content, no explanations or additional text.")
+                "content": ("Create a conceptual repository overview for Confluence:\n\nCURRENT CONTENT:\n" + $confluence + "\n\nRECENT CHANGES:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nINSTRUCTIONS:\n1. Start with <h1>Commit2Viz Repository</h1>\n2. Use proper H2/H3 headers for sections (Architecture, Recent Changes, Common Issues)\n3. Focus on CONCEPTUAL understanding, not commit details\n4. Only highlight SIGNIFICANT changes, ignore routine commits\n5. Create single <pre><code> blocks for code (no wrapping)\n6. Add 'Common Issues & Solutions' section with:\n   - Known bugs and how they were fixed\n   - Troubleshooting steps\n   - Best practices\n7. Make it strategic and high-level\n8. Avoid detailed commit tables - focus on what matters\n\nReturn ONLY clean HTML content.")
               }
             ],
             "max_tokens": 3000,
