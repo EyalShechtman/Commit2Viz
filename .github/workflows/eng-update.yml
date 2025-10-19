@@ -200,7 +200,7 @@ jobs:
               },
               {
                 "role": "user",
-                "content": ("Start with a timestamped section header like '<h2>Recent Work - " + $current_date + "</h2>'. " + $user_prompt + "\n\nCURRENT PAGE CONTENT:\n" + $confluence + "\n\nNEW COMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats)
+                "content": ("Start with a timestamped section header like \"<h2>Recent Work - " + $current_date + "</h2>\". " + $user_prompt + "\n\nCURRENT PAGE CONTENT:\n" + $confluence + "\n\nNEW COMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats)
               }
             ],
             "temperature": 0.7
