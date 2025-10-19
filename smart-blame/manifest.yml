@@ -5,7 +5,7 @@ modules:
       resolver:
         function: resolver
       render: native
-      title: smart-blame
+      title: ChatGPT Assistant
   function:
     - key: resolver
       handler: index.handler
@@ -18,3 +18,9 @@ app:
     memoryMB: 256
     architecture: arm64
   id: ari:cloud:ecosystem::app/c111c8f2-8d93-49e0-aad2-c0bdd02c0222
+permissions:
+  scopes: []
+  external:
+    fetch:
+      backend:
+        - address: https://api.openai.com
