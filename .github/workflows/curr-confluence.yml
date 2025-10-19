@@ -218,7 +218,7 @@ jobs:
         
         # Check if OpenAI call was successful
         if jq -e '.error' openai-response.json > /dev/null; then
-          echo "❌ OPENAI API ERROR:"
+          echo "OPENAI API ERROR:"
           echo "   Error: $(jq -r '.error.message' openai-response.json)"
           echo "   Type: $(jq -r '.error.type' openai-response.json)"
           echo "   Code: $(jq -r '.error.code // "N/A"' openai-response.json)"
