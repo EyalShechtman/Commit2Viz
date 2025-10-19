@@ -170,29 +170,38 @@ jobs:
         CODE_CHANGES_DECODED=$(echo "$CODE_CHANGES_B64" | base64 -d)
         FILE_STATS_DECODED=$(echo "$FILE_STATS_B64" | base64 -d)
         
-        # Create the prompt for OpenAI
-        cat > openai-prompt.json << EOF
-        {
-          "model": "gpt-4",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are a technical documentation assistant. You will receive current Confluence documentation, git commit information, and code changes. Generate updated Confluence documentation that reflects the recent changes made to the codebase."
-            },
-            {
-              "role": "user",
-              "content": "Current Confluence Documentation:\n\n$(jq -r '.body.storage.value' confluence-response.json)\n\n\nRecent Git Changes:\n\n$(cat commit-data.json | jq .)\n\n\nCode Changes (Diff):\n\n$CODE_CHANGES_DECODED\n\n\nFile Statistics:\n\n$FILE_STATS_DECODED\n\n\nPlease generate updated Confluence documentation that reflects these changes. Return only the updated HTML content."
-            }
-          ],
-          "max_tokens": 3000,
-          "temperature": 0.7
-        }
-        EOF
+        # Properly escape all content for JSON
+        CONFLUENCE_CONTENT=$(jq -r '.body.storage.value // "No content found"' confluence-response.json | jq -R -s .)
+        COMMIT_DATA_JSON=$(cat commit-data.json | jq -c .)
+        CODE_CHANGES_JSON=$(echo "$CODE_CHANGES_DECODED" | jq -R -s .)
+        FILE_STATS_JSON=$(echo "$FILE_STATS_DECODED" | jq -R -s .)
+        
+        # Create the prompt for OpenAI using jq to build proper JSON
+        jq -n \
+          --arg confluence "$CONFLUENCE_CONTENT" \
+          --arg commit_data "$COMMIT_DATA_JSON" \
+          --arg code_changes "$CODE_CHANGES_JSON" \
+          --arg file_stats "$FILE_STATS_JSON" \
+          '{
+            "model": "gpt-4",
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are a technical documentation assistant. You will receive current Confluence documentation, git commit information, and code changes. Generate updated Confluence documentation that reflects the recent changes made to the codebase."
+              },
+              {
+                "role": "user",
+                "content": ("Current Confluence Documentation:\n\n" + $confluence + "\n\n\nRecent Git Changes:\n\n" + $commit_data + "\n\n\nCode Changes (Diff):\n\n" + $code_changes + "\n\n\nFile Statistics:\n\n" + $file_stats + "\n\n\nPlease generate updated Confluence documentation that reflects these changes. Return only the updated HTML content.")
+              }
+            ],
+            "max_tokens": 3000,
+            "temperature": 0.7
+          }' > openai-prompt.json
         
         echo "=== CALLING OPENAI API ==="
         curl -X POST \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+          -H "Authorization: Bearer $OPENAI_API_KEY" \
           -d @openai-prompt.json \
           https://api.openai.com/v1/chat/completions \
           -o openai-response.json
