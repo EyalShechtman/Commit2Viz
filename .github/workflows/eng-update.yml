@@ -169,11 +169,12 @@ jobs:
         COMMIT_DATA=$(cat engineer-commit-data.json | jq -c .)
         CODE_CHANGES=$(cat code-changes.diff | head -c 4000 | jq -R -s .)
         FILE_STATS=$(cat file-stats.txt | head -c 1000 | jq -R -s .)
-        
+        CURRENT_DATE=$(date -u +%Y-%m-%d)
+
         # Create prompts
-        SYSTEM_PROMPT="You are a technical documentation expert who writes updates for engineer activity pages on Confluence. Generate clean HTML content that documents what this engineer has accomplished. Focus on: what they built/fixed, why it matters, technical approach, and impact. Keep it professional but conversational. Return ONLY clean HTML - NO quotes, NO JSON wrapping. Use proper HTML structure with headers, lists, and paragraphs."
+        SYSTEM_PROMPT="You are a technical documentation expert who writes updates for engineer activity pages on Confluence. Generate clean HTML content that documents what this engineer has accomplished. Focus on: what they built/fixed, why it matters, technical approach, and impact. Keep it professional but conversational. Return ONLY clean HTML BODY CONTENT - NO DOCTYPE, NO html, head, or body tags. NO quotes, NO JSON wrapping. Use proper HTML structure with headers, lists, and paragraphs."
         
-        USER_PROMPT="Update the Confluence page for engineer ${{ steps.engineer_info.outputs.engineer_name }}. Document their recent work in a clear, organized way. Include sections for: Recent Work Summary (what they accomplished), Technical Details (how they did it, key changes), Files Modified (list of changed files), Impact & Context (why this matters). Preserve any existing important content but update with new information. Use proper HTML formatting. Return ONLY clean HTML without quotes or JSON."
+        USER_PROMPT="Update the Confluence page for engineer ${{ steps.engineer_info.outputs.engineer_name }} by ADDING a new detailed section about their recent accomplishments. Start with a timestamped section header. Then provide a detailed breakdown of what they accomplished, focusing on their technical skills and code changes. Write it in a narrative style like '${{ steps.engineer_info.outputs.engineer_name }} has worked on GitHub workflows regarding X, Y, Z. He was able to complete Y, Z and demonstrated expertise in A, B, C.' Include sections for: Technical Accomplishments (specific code changes and implementations), Skills Demonstrated (what technical abilities they showed), Files & Components Modified (detailed breakdown), and Impact (what this means for the project). PRESERVE ALL EXISTING CONTENT BELOW the new section. Return the COMPLETE updated page with new content at the top and all existing content preserved below. Use proper HTML formatting."
         
         # Build OpenAI request
         jq -n \
@@ -181,6 +182,7 @@ jobs:
           --arg commit_data "$COMMIT_DATA" \
           --arg code_changes "$CODE_CHANGES" \
           --arg file_stats "$FILE_STATS" \
+          --arg current_date "$CURRENT_DATE" \
           --arg system_prompt "$SYSTEM_PROMPT" \
           --arg user_prompt "$USER_PROMPT" \
           --arg engineer "${{ steps.engineer_info.outputs.engineer_name }}" \
@@ -193,7 +195,7 @@ jobs:
               },
               {
                 "role": "user",
-                "content": ($user_prompt + "\n\nCURRENT PAGE CONTENT:\n" + $confluence + "\n\nNEW COMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats)
+                "content": ("Start with a timestamped section header like '<h2>Recent Work - " + $current_date + "</h2>'. " + $user_prompt + "\n\nCURRENT PAGE CONTENT:\n" + $confluence + "\n\nNEW COMMIT DATA:\n" + $commit_data + "\n\nCODE CHANGES:\n" + $code_changes + "\n\nFILE STATS:\n" + $file_stats)
               }
             ],
             "temperature": 0.7
@@ -242,8 +244,8 @@ jobs:
           AI_CONTENT=$(echo "$AI_CONTENT" | sed 's/^"//' | sed 's/"$//')
           
           # Safety check
-          if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR"; then
-            echo "❌ AI content contains errors - using safe fallback"
+          if echo "$AI_CONTENT" | grep -q -E "(error|Error|ERROR|Something went wrong|<!DOCTYPE|<html|<head|<body)" || [ -z "$AI_CONTENT" ]; then
+            echo "❌ AI content contains errors or full HTML document structure - using safe fallback"
             AI_CONTENT="<h1>$ENGINEER_NAME - Activity Log</h1><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Commit</h2><p>Commit: ${{ github.sha }}</p><p>Message: ${{ github.event.head_commit.message }}</p>"
           fi
         else
