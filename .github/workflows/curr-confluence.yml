@@ -114,7 +114,7 @@ jobs:
           "current_commit": {
             "sha": "${{ github.sha }}",
             "author": "${{ github.actor }}",
-            "message": "${{ github.event.head_commit.message }}",
+            "message": $(echo '${{ github.event.head_commit.message }}' | jq -R -s .),
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           },
           "branch": "${{ github.ref_name }}",
