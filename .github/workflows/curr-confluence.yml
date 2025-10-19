@@ -40,10 +40,28 @@ jobs:
         git diff --name-only origin/main...HEAD
         
         echo "=== COMPLETE CODE CHANGES ==="
-        git diff origin/main...HEAD
+        git diff origin/main...HEAD > code-changes.diff
+        cat code-changes.diff
+        
+        echo "=== FILE STATISTICS ==="
+        git diff --stat origin/main...HEAD > file-stats.txt
+        cat file-stats.txt
 
     - name: Create Comprehensive Commit Data
       run: |
+        # Create commit history array
+        COMMIT_HISTORY=$(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso origin/main...HEAD | tr '\n' ',' | sed 's/,$//')
+        
+        # Create files changed array
+        FILES_CHANGED=$(git diff --name-only origin/main...HEAD | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
+        
+        # Create contributors array
+        CONTRIBUTORS=$(git log --pretty=format:'%an' origin/main...HEAD | sort -u | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
+        
+        # Encode code changes and file stats for JSON
+        CODE_CHANGES_B64=$(base64 -w 0 code-changes.diff)
+        FILE_STATS_B64=$(base64 -w 0 file-stats.txt)
+        
         cat > commit-data.json << EOF
         {
           "current_commit": {
@@ -54,16 +72,12 @@ jobs:
           },
           "branch": "${{ github.ref_name }}",
           "event_type": "${{ github.event_name }}",
-          "commit_history": [
-            $(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso origin/main...HEAD | paste -sd,)
-          ],
-          "files_changed": [
-            $(git diff --name-only origin/main...HEAD | sed 's/^/"/;s/$/"/' | paste -sd,)
-          ],
+          "commit_history": [$COMMIT_HISTORY],
+          "files_changed": [$FILES_CHANGED],
+          "code_changes": "$CODE_CHANGES_B64",
+          "file_statistics": "$FILE_STATS_B64",
           "total_commits": $(git rev-list --count origin/main...HEAD),
-          "contributors": [
-            $(git log --pretty=format:'%an' origin/main...HEAD | sort -u | sed 's/^/"/;s/$/"/' | paste -sd,)
-          ]
+          "contributors": [$CONTRIBUTORS]
         }
         EOF
         
