@@ -1,0 +1,4 @@
+confluence-config.txt
+node_modules/
+*.log
+.env

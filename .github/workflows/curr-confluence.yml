@@ -1,0 +1,98 @@
+name: get curr confluence
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  get-curr-confluence:
+    runs-on: ubuntu-latest
+    
+    env:
+      CONFLUENCE_URL: ${{ secrets.CONFLUENCE_URL }}
+      CONFLUENCE_USERNAME: ${{ secrets.CONFLUENCE_USERNAME }}
+      CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+      REPO_PAGE_ID: ${{ secrets.REPO_PAGE_ID }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 
+
+    - name: Extract Comprehensive Commit Information
+      run: |
+        echo "=== COMMIT INFORMATION ==="
+        echo "Current Commit SHA: ${{ github.sha }}"
+        echo "Author: ${{ github.actor }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Event Type: ${{ github.event_name }}"
+        
+        echo "=== COMMITS SINCE LAST MAIN MERGE ==="
+        git log --oneline origin/main...HEAD
+        
+        echo "=== DETAILED COMMIT HISTORY ==="
+        git log --pretty=format:"%h - %an, %ar : %s" origin/main...HEAD
+
+    - name: Get All Files Changed Since Last Main
+      run: |
+        echo "=== ALL FILES CHANGED SINCE LAST MAIN ==="
+        git diff --name-only origin/main...HEAD
+        
+        echo "=== COMPLETE CODE CHANGES ==="
+        git diff origin/main...HEAD
+
+    - name: Create Comprehensive Commit Data
+      run: |
+        cat > commit-data.json << EOF
+        {
+          "current_commit": {
+            "sha": "${{ github.sha }}",
+            "author": "${{ github.actor }}",
+            "message": "${{ github.event.head_commit.message }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          },
+          "branch": "${{ github.ref_name }}",
+          "event_type": "${{ github.event_name }}",
+          "commit_history": [
+            $(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso origin/main...HEAD | paste -sd,)
+          ],
+          "files_changed": [
+            $(git diff --name-only origin/main...HEAD | sed 's/^/"/;s/$/"/' | paste -sd,)
+          ],
+          "total_commits": $(git rev-list --count origin/main...HEAD),
+          "contributors": [
+            $(git log --pretty=format:'%an' origin/main...HEAD | sort -u | sed 's/^/"/;s/$/"/' | paste -sd,)
+          ]
+        }
+        EOF
+        
+        echo "=== COMPREHENSIVE COMMIT DATA ==="
+        cat commit-data.json
+
+    - name: get curr confluence repo file
+      run: |
+        echo "fetch curr confluence repo file"
+        curl --request GET \
+          --url "$CONFLUENCE_URL/wiki/api/v2/pages/$REPO_PAGE_ID?body-format=storage" \
+          --user "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" \
+          --header 'Accept: application/json' \
+          -o confluence-response.json
+
+        echo "=== CONFLUENCE PAGE CONTENT ==="
+        cat confluence-response.json
+        
+        echo "=== PAGE TITLE ==="
+        jq -r '.title' confluence-response.json
+        
+        echo "=== PAGE BODY CONTENT ==="
+        jq -r '.body.storage.value' confluence-response.json
+
+    - name: Combine Data for AI Processing
+      run: |
+        echo "=== COMBINED DATA FOR AI ==="
+        echo "Confluence Content:"
+        jq -r '.body.storage.value' confluence-response.json
+        echo ""
+        echo "Commit Information:"
+        cat commit-data.json
