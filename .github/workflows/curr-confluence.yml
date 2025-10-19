@@ -244,9 +244,15 @@ jobs:
           echo "✅ Using AI-generated content"
           AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
           
-          # Strip quotes from AI content to prevent HTML entity encoding issues
-          AI_CONTENT=$(echo "$AI_CONTENT" | sed 's/^"//' | sed 's/"$//')
-          echo "Content after quote stripping: $(echo "$AI_CONTENT" | head -c 100)..."
+          # Normalize AI HTML: strip code fences, quotes, and extra whitespace
+          AI_CONTENT=$(printf '%s' "$AI_CONTENT" | sed -E \
+            -e '1s/^[[:space:]]*```html[[:space:]]*//' \
+            -e '$s/[[:space:]]*```[[:space:]]*$//' \
+            -e '1s/^"//' -e '$s/"$//' \
+            -e 's#<p>```html</p>##g' -e 's#<p>```</p>##g' \
+            -e 's/^[[:space:]]+//; s/[[:space:]]+$//')
+          
+          echo "Content after sanitization: $(echo "$AI_CONTENT" | head -c 100)..."
           
           # Safety check - if content looks problematic, use fallback
           if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR\|Something went wrong"; then
@@ -266,7 +272,7 @@ jobs:
           '{
             "id": $page_id,
             "status": "current",
-            "title": "confluence repo test page",
+            "title": "Commit2Viz Repository Overview",
             "body": {
               "representation": "storage",
               "value": $content
