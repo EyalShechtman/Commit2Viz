@@ -30,6 +30,9 @@ jobs:
         # Map author to page ID (case-insensitive matching)
         AUTHOR_UPPER=$(echo "$COMMIT_AUTHOR" | tr '[:lower:]' '[:upper:]')
         
+        PAGE_ID=""
+        ENGINEER_NAME=""
+        
         case "$AUTHOR_UPPER" in
           *GUY*)
             PAGE_ID="491638"
@@ -50,13 +53,15 @@ jobs:
           *)
             echo "⚠️  Unknown author: $COMMIT_AUTHOR"
             echo "Skipping Confluence update for unknown engineer"
-            exit 0
             ;;
         esac
         
         echo "engineer_name=$ENGINEER_NAME" >> $GITHUB_OUTPUT
         echo "page_id=$PAGE_ID" >> $GITHUB_OUTPUT
-        echo "✅ Identified Engineer: $ENGINEER_NAME (Page ID: $PAGE_ID)"
+        
+        if [ -n "$PAGE_ID" ]; then
+          echo "✅ Identified Engineer: $ENGINEER_NAME (Page ID: $PAGE_ID)"
+        fi
 
     - name: Extract Engineer's Commit Information
       if: steps.engineer_info.outputs.page_id != ''
