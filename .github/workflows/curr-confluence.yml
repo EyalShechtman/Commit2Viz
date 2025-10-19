@@ -240,28 +240,67 @@ jobs:
         PAGE_VERSION=$(jq -r '.version.number' confluence-response.json)
         REPO_PAGE_ID=$(jq -r '.id' confluence-response.json)
         
-        # Check if we have valid AI content or need to use fallback
-        if jq -e '.choices[0].message.content' openai-response.json > /dev/null 2>&1; then
-          echo "✅ Using AI-generated content"
-          AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
+        # Check if there are significant changes worth updating
+        TOTAL_COMMITS=$(jq -r '.total_commits' commit-data.json)
+        FILES_CHANGED_COUNT=$(jq -r '.files_changed | length' commit-data.json)
+        
+        echo "=== CHANGE ANALYSIS ==="
+        echo "Total commits: $TOTAL_COMMITS"
+        echo "Files changed: $FILES_CHANGED_COUNT"
+        
+        # Determine if changes are significant enough to update
+        SIGNIFICANT_CHANGES=false
+        
+        # Check for significant changes
+        if [ "$TOTAL_COMMITS" -gt 0 ]; then
+          # Check if any commit messages indicate significant changes
+          if jq -r '.commit_history[].message' commit-data.json | grep -qiE "(major|significant|important|feature|fix|bug|refactor|architecture|design)"; then
+            SIGNIFICANT_CHANGES=true
+            echo "✅ Significant changes detected in commit messages"
+          fi
           
-          # Normalize AI HTML: strip code fences, quotes, and extra whitespace
-          AI_CONTENT=$(printf '%s' "$AI_CONTENT" | sed -E \
-            -e '1s/^[[:space:]]*```html[[:space:]]*//' \
-            -e '$s/[[:space:]]*```[[:space:]]*$//' \
-            -e '1s/^"//' -e '$s/"$//' \
-            -e 's#<p>```html</p>##g' -e 's#<p>```</p>##g' \
-            -e 's/^[[:space:]]+//; s/[[:space:]]+$//')
+          # Check if multiple files changed (indicates substantial work)
+          if [ "$FILES_CHANGED_COUNT" -gt 3 ]; then
+            SIGNIFICANT_CHANGES=true
+            echo "✅ Multiple files changed ($FILES_CHANGED_COUNT files)"
+          fi
           
-          echo "Content after sanitization: $(echo "$AI_CONTENT" | head -c 100)..."
+          # Check if workflow files changed (always significant for this project)
+          if jq -r '.files_changed[]' commit-data.json | grep -q "\.github/workflows/"; then
+            SIGNIFICANT_CHANGES=true
+            echo "✅ Workflow files changed"
+          fi
+        fi
+        
+        if [ "$SIGNIFICANT_CHANGES" = true ]; then
+          echo "🔄 Significant changes detected - updating Confluence content"
           
-          # Safety check - if content looks problematic, use fallback
-          if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR\|Something went wrong"; then
-            echo "❌ AI content contains error messages - using safe fallback"
-            AI_CONTENT="<h1>Commit2Viz Repository</h1><p><strong>Repository Status:</strong> Active</p><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Activity</h2><p>GitHub Actions workflow is running and updating this page automatically.</p><h2>Common Issues & Solutions</h2><p>This section will be populated as issues are encountered and resolved.</p>"
+          # Check if we have valid AI content or need to use fallback
+          if jq -e '.choices[0].message.content' openai-response.json > /dev/null 2>&1; then
+            echo "✅ Using AI-generated content"
+            AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
+            
+            # Normalize AI HTML: strip code fences, quotes, and extra whitespace
+            AI_CONTENT=$(printf '%s' "$AI_CONTENT" | sed -E \
+              -e '1s/^[[:space:]]*```html[[:space:]]*//' \
+              -e '$s/[[:space:]]*```[[:space:]]*$//' \
+              -e '1s/^"//' -e '$s/"$//' \
+              -e 's#<p>```html</p>##g' -e 's#<p>```</p>##g' \
+              -e 's/^[[:space:]]+//; s/[[:space:]]+$//')
+            
+            echo "Content after sanitization: $(echo "$AI_CONTENT" | head -c 100)..."
+            
+            # Safety check - if content looks problematic, use fallback
+            if echo "$AI_CONTENT" | grep -q "error\|Error\|ERROR\|Something went wrong"; then
+              echo "❌ AI content contains error messages - using safe fallback"
+              AI_CONTENT="<h1>Commit2Viz Repository</h1><p><strong>Repository Status:</strong> Active</p><p><strong>Last Updated:</strong> $(date -u +%Y-%m-%dT%H:%M:%SZ)</p><h2>Recent Activity</h2><p>GitHub Actions workflow is running and updating this page automatically.</p><h2>Common Issues & Solutions</h2><p>This section will be populated as issues are encountered and resolved.</p>"
+            fi
+          else
+            echo "⚠️  OpenAI failed, using original Confluence content as fallback"
+            AI_CONTENT=$(jq -r '.body.storage.value' confluence-response.json)
           fi
         else
-          echo "⚠️  OpenAI failed, using original Confluence content as fallback"
+          echo "📝 No significant changes detected - preserving existing Confluence content"
           AI_CONTENT=$(jq -r '.body.storage.value' confluence-response.json)
         fi
         
