@@ -28,35 +28,81 @@ jobs:
         echo "Branch: ${{ github.ref_name }}"
         echo "Event Type: ${{ github.event_name }}"
         
-        echo "=== COMMITS SINCE LAST MAIN MERGE ==="
-        git log --oneline origin/main...HEAD
-        
-        echo "=== DETAILED COMMIT HISTORY ==="
-        git log --pretty=format:"%h - %an, %ar : %s" origin/main...HEAD
+        # For merge commits, get the changes from the merged branch
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+          echo "=== MERGE COMMIT DETECTED ==="
+          # Get the parent commits (the merge commit has 2 parents)
+          MERGE_PARENTS=$(git rev-list --parents -n 1 HEAD | wc -w)
+          if [ $MERGE_PARENTS -eq 3 ]; then
+            # This is a merge commit, get changes from the merged branch
+            MERGED_BRANCH=$(git rev-list --parents -n 1 HEAD | cut -d' ' -f3)
+            BASE_COMMIT=$(git merge-base HEAD~1 $MERGED_BRANCH)
+            echo "=== COMMITS FROM MERGED BRANCH ==="
+            git log --oneline $BASE_COMMIT..$MERGED_BRANCH
+            echo "=== DETAILED COMMIT HISTORY ==="
+            git log --pretty=format:"%h - %an, %ar : %s" $BASE_COMMIT..$MERGED_BRANCH
+          fi
+        else
+          echo "=== COMMITS SINCE LAST MAIN MERGE ==="
+          git log --oneline origin/main...HEAD
+          echo "=== DETAILED COMMIT HISTORY ==="
+          git log --pretty=format:"%h - %an, %ar : %s" origin/main...HEAD
+        fi
 
     - name: Get All Files Changed Since Last Main
       run: |
-        echo "=== ALL FILES CHANGED SINCE LAST MAIN ==="
-        git diff --name-only origin/main...HEAD
+        # Determine the comparison range based on commit type
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+          MERGE_PARENTS=$(git rev-list --parents -n 1 HEAD | wc -w)
+          if [ $MERGE_PARENTS -eq 3 ]; then
+            MERGED_BRANCH=$(git rev-list --parents -n 1 HEAD | cut -d' ' -f3)
+            BASE_COMMIT=$(git merge-base HEAD~1 $MERGED_BRANCH)
+            COMPARE_RANGE="$BASE_COMMIT..$MERGED_BRANCH"
+            echo "=== USING MERGE COMPARISON: $COMPARE_RANGE ==="
+          else
+            COMPARE_RANGE="origin/main...HEAD"
+            echo "=== USING STANDARD COMPARISON: $COMPARE_RANGE ==="
+          fi
+        else
+          COMPARE_RANGE="origin/main...HEAD"
+          echo "=== USING STANDARD COMPARISON: $COMPARE_RANGE ==="
+        fi
+        
+        echo "=== ALL FILES CHANGED ==="
+        git diff --name-only $COMPARE_RANGE
         
         echo "=== COMPLETE CODE CHANGES ==="
-        git diff origin/main...HEAD > code-changes.diff
+        git diff $COMPARE_RANGE > code-changes.diff
         cat code-changes.diff
         
         echo "=== FILE STATISTICS ==="
-        git diff --stat origin/main...HEAD > file-stats.txt
+        git diff --stat $COMPARE_RANGE > file-stats.txt
         cat file-stats.txt
 
     - name: Create Comprehensive Commit Data
       run: |
+        # Determine the comparison range based on commit type
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"Merge pull request"* ]]; then
+          MERGE_PARENTS=$(git rev-list --parents -n 1 HEAD | wc -w)
+          if [ $MERGE_PARENTS -eq 3 ]; then
+            MERGED_BRANCH=$(git rev-list --parents -n 1 HEAD | cut -d' ' -f3)
+            BASE_COMMIT=$(git merge-base HEAD~1 $MERGED_BRANCH)
+            COMPARE_RANGE="$BASE_COMMIT..$MERGED_BRANCH"
+          else
+            COMPARE_RANGE="origin/main...HEAD"
+          fi
+        else
+          COMPARE_RANGE="origin/main...HEAD"
+        fi
+        
         # Create commit history array
-        COMMIT_HISTORY=$(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso origin/main...HEAD | tr '\n' ',' | sed 's/,$//')
+        COMMIT_HISTORY=$(git log --pretty=format:'{"sha":"%h","author":"%an","message":"%s","date":"%ad"}' --date=iso $COMPARE_RANGE | tr '\n' ',' | sed 's/,$//')
         
         # Create files changed array
-        FILES_CHANGED=$(git diff --name-only origin/main...HEAD | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
+        FILES_CHANGED=$(git diff --name-only $COMPARE_RANGE | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
         
         # Create contributors array
-        CONTRIBUTORS=$(git log --pretty=format:'%an' origin/main...HEAD | sort -u | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
+        CONTRIBUTORS=$(git log --pretty=format:'%an' $COMPARE_RANGE | sort -u | sed 's/^/"/;s/$/"/' | tr '\n' ',' | sed 's/,$//')
         
         # Encode code changes and file stats for JSON
         CODE_CHANGES_B64=$(base64 -w 0 code-changes.diff)
@@ -76,7 +122,7 @@ jobs:
           "files_changed": [$FILES_CHANGED],
           "code_changes": "$CODE_CHANGES_B64",
           "file_statistics": "$FILE_STATS_B64",
-          "total_commits": $(git rev-list --count origin/main...HEAD),
+          "total_commits": $(git rev-list --count $COMPARE_RANGE),
           "contributors": [$CONTRIBUTORS]
         }
         EOF
