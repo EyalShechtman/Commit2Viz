@@ -13,6 +13,7 @@ jobs:
       CONFLUENCE_USERNAME: ${{ secrets.CONFLUENCE_USERNAME }}
       CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
       REPO_PAGE_ID: ${{ secrets.REPO_PAGE_ID }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     
     steps:
     - name: Checkout code
@@ -156,3 +157,48 @@ jobs:
         echo ""
         echo "Commit Information:"
         cat commit-data.json
+
+    - name: Send Data to OpenAI for Confluence Update
+      run: |
+        echo "=== SENDING DATA TO OPENAI FOR CONFLUENCE UPDATE ==="
+        
+        # Read the Base64 encoded data from files
+        CODE_CHANGES_B64=$(base64 -w 0 code-changes.diff)
+        FILE_STATS_B64=$(base64 -w 0 file-stats.txt)
+        
+        # Decode the Base64 encoded data for the API call
+        CODE_CHANGES_DECODED=$(echo "$CODE_CHANGES_B64" | base64 -d)
+        FILE_STATS_DECODED=$(echo "$FILE_STATS_B64" | base64 -d)
+        
+        # Create the prompt for OpenAI
+        cat > openai-prompt.json << EOF
+        {
+          "model": "gpt-4",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a technical documentation assistant. You will receive current Confluence documentation, git commit information, and code changes. Generate updated Confluence documentation that reflects the recent changes made to the codebase."
+            },
+            {
+              "role": "user",
+              "content": "Current Confluence Documentation:\n\n$(jq -r '.body.storage.value' confluence-response.json)\n\n\nRecent Git Changes:\n\n$(cat commit-data.json | jq .)\n\n\nCode Changes (Diff):\n\n$CODE_CHANGES_DECODED\n\n\nFile Statistics:\n\n$FILE_STATS_DECODED\n\n\nPlease generate updated Confluence documentation that reflects these changes. Return only the updated HTML content."
+            }
+          ],
+          "max_tokens": 3000,
+          "temperature": 0.7
+        }
+        EOF
+        
+        echo "=== CALLING OPENAI API ==="
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+          -d @openai-prompt.json \
+          https://api.openai.com/v1/chat/completions \
+          -o openai-response.json
+        
+        echo "=== OPENAI RESPONSE ==="
+        cat openai-response.json
+        
+        echo "=== UPDATED CONFLUENCE CONTENT ==="
+        jq -r '.choices[0].message.content' openai-response.json
