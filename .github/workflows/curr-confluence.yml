@@ -170,11 +170,11 @@ jobs:
         CODE_CHANGES_DECODED=$(echo "$CODE_CHANGES_B64" | base64 -d)
         FILE_STATS_DECODED=$(echo "$FILE_STATS_B64" | base64 -d)
         
-        # Properly escape all content for JSON
-        CONFLUENCE_CONTENT=$(jq -r '.body.storage.value // "No content found"' confluence-response.json | jq -R -s .)
+        # Properly escape all content for JSON and truncate to avoid token limits
+        CONFLUENCE_CONTENT=$(jq -r '.body.storage.value // "No content found"' confluence-response.json | head -c 2000 | jq -R -s .)
         COMMIT_DATA_JSON=$(cat commit-data.json | jq -c .)
-        CODE_CHANGES_JSON=$(echo "$CODE_CHANGES_DECODED" | jq -R -s .)
-        FILE_STATS_JSON=$(echo "$FILE_STATS_DECODED" | jq -R -s .)
+        CODE_CHANGES_JSON=$(echo "$CODE_CHANGES_DECODED" | head -c 3000 | jq -R -s .)
+        FILE_STATS_JSON=$(echo "$FILE_STATS_DECODED" | head -c 1000 | jq -R -s .)
         
         # Create the prompt for OpenAI using jq to build proper JSON
         jq -n \
@@ -209,8 +209,21 @@ jobs:
         echo "=== OPENAI RESPONSE ==="
         cat openai-response.json
         
-        echo "=== UPDATED CONFLUENCE CONTENT ==="
-        jq -r '.choices[0].message.content' openai-response.json
+        # Check if OpenAI call was successful
+        if jq -e '.error' openai-response.json > /dev/null; then
+          echo "❌ OPENAI API ERROR:"
+          echo "   Error: $(jq -r '.error.message' openai-response.json)"
+          echo "   Type: $(jq -r '.error.type' openai-response.json)"
+          echo "   Code: $(jq -r '.error.code // "N/A"' openai-response.json)"
+          echo ""
+          echo "=== FALLBACK: USING ORIGINAL CONFLUENCE CONTENT ==="
+          jq -r '.body.storage.value' confluence-response.json
+          exit 1
+        else
+          echo "✅ OPENAI API SUCCESS"
+          echo "=== UPDATED CONFLUENCE CONTENT ==="
+          jq -r '.choices[0].message.content' openai-response.json
+        fi
 
     - name: Update Confluence Page with AI Content
       run: |
@@ -220,8 +233,14 @@ jobs:
         PAGE_VERSION=$(jq -r '.version.number' confluence-response.json)
         REPO_PAGE_ID=$(jq -r '.id' confluence-response.json)
         
-        # Get the AI-generated content
-        AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
+        # Check if we have valid AI content or need to use fallback
+        if jq -e '.choices[0].message.content' openai-response.json > /dev/null 2>&1; then
+          echo "✅ Using AI-generated content"
+          AI_CONTENT=$(jq -r '.choices[0].message.content' openai-response.json)
+        else
+          echo "⚠️  OpenAI failed, using original Confluence content as fallback"
+          AI_CONTENT=$(jq -r '.body.storage.value' confluence-response.json)
+        fi
         
         # Create the update payload
         jq -n \
