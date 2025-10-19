@@ -1,0 +1,29 @@
+modules:
+  bitbucket:repoCodeOverviewCard:
+    - key: dubhacks1-hello-world-repository-code-overview-card
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: copilot
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs22.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/78d4b717-af12-4b14-bd01-96653092d659
+permissions:
+  external:
+    fetch:
+      backend:
+        - address: api.openai.com
+        - address: api.bitbucket.org
+        - address: uw-team-rcbm7f2u.atlassian.net
+  scopes:
+    - read:repository:bitbucket
